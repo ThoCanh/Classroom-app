@@ -1,0 +1,54 @@
+# Firestore Rules với Authentication
+
+## Rules cho Production (Yêu cầu Authentication)
+```
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Cho phép đọc/ghi collection sinhVien khi đã đăng nhập
+    match /sinhVien/{document} {
+      allow read, write: if request.auth != null;
+    }
+    
+    // Cho phép đọc/ghi collection baiTap khi đã đăng nhập
+    match /baiTap/{document} {
+      allow read, write: if request.auth != null;
+    }
+    
+    // Cho phép đọc/ghi collection tinNhan khi đã đăng nhập
+    match /tinNhan/{document} {
+      allow read, write: if request.auth != null;
+    }
+    
+    // Cho phép đọc/ghi tất cả documents khi đã đăng nhập
+    match /{document=**} {
+      allow read, write: if request.auth != null;
+    }
+  }
+}
+```
+
+## Rules cho Development (Không yêu cầu Authentication)
+```
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /{document=**} {
+      allow read, write: if true;
+    }
+  }
+}
+```
+
+## Cách cấu hình:
+1. Truy cập Firebase Console: https://console.firebase.google.com/
+2. Chọn project: classroom-app-3ee5e
+3. Vào Firestore Database > Rules
+4. Copy và paste rules phù hợp
+5. Nhấn "Publish" để lưu
+
+## Lưu ý:
+- Rules production yêu cầu authentication (bảo mật hơn)
+- Rules development cho phép tất cả đọc/ghi (không bảo mật)
+- Chỉ sử dụng rules development cho testing
+- Sau khi cấu hình rules production, ứng dụng sẽ yêu cầu đăng nhập Firebase Auth

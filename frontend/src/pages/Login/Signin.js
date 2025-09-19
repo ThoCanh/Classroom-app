@@ -4,9 +4,14 @@ import './Signin.css';
 
 function Signin() {
   const [soDienThoai, setSoDienThoai] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
 
-  const handleNext = () => {
+  console.log('Signin component is rendering...');
+
+  const handleNext = async () => {
+    console.log('HandleNext called with phone:', soDienThoai);
+    
     if (!soDienThoai.trim()) {
       alert('Vui lòng nhập số điện thoại');
       return;
@@ -19,8 +24,26 @@ function Signin() {
       return;
     }
 
-    // Chuyển trực tiếp đến dashboard
-    navigate('/student/Dbstudent');
+    setIsLoading(true);
+
+    try {
+      // Simple navigation without Firebase for now
+      if (soDienThoai === '0336499876') {
+        localStorage.setItem('teacherPhone', soDienThoai);
+        sessionStorage.setItem('teacherPhone', soDienThoai);
+        localStorage.setItem('userRole', 'teacher');
+        navigate('/teacher/DBinstructor');
+      } else {
+        localStorage.setItem('studentPhone', soDienThoai);
+        localStorage.setItem('userRole', 'student');
+        navigate('/student/Dbstudent');
+      }
+    } catch (error) {
+      console.error('Lỗi đăng nhập:', error);
+      alert('Có lỗi xảy ra khi đăng nhập. Vui lòng thử lại.');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleSignUp = () => {
@@ -63,8 +86,12 @@ function Signin() {
         </div>
 
         {/* Nút tiếp tục */}
-        <button className="nut-tieptuc" onClick={handleNext}>
-          Next
+        <button 
+          className="nut-tieptuc" 
+          onClick={handleNext}
+          disabled={isLoading}
+        >
+          {isLoading ? 'Đang đăng nhập...' : 'Next'}
         </button>
 
         {/* Thông tin phụ */}
