@@ -4,15 +4,13 @@ const router = express.Router();
 
 // Import các route modules
 const authRoutes = require('./auth');
-const userRoutes = require('./users');
-const classroomRoutes = require('./classrooms');
-// const firebaseTestRoutes = require('./firebase-test');
+const instructorRoutes = require('./instructor');
+const studentRoutes = require('./student');
 
 // Sử dụng các routes
 router.use('/auth', authRoutes);
-router.use('/users', userRoutes);
-router.use('/classrooms', classroomRoutes);
-// router.use('/', firebaseTestRoutes);
+router.use('/instructor', instructorRoutes);
+router.use('/student', studentRoutes);
 
 // Route test
 router.get('/test', (req, res) => {

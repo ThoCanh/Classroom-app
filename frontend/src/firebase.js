@@ -1,13 +1,13 @@
 // Import the functions you need from the SDKs you need
 import { initializeApp } from "firebase/app";
 import { getAnalytics, isSupported } from "firebase/analytics";
-import { getFirestore, connectFirestoreEmulator } from "firebase/firestore";
+import { getFirestore } from "firebase/firestore";
 import { 
   getAuth, 
-  signInAnonymously, 
-  signInWithCredential,
   onAuthStateChanged,
-  signOut
+  signOut,
+  signInWithPhoneNumber,
+  RecaptchaVerifier
 } from "firebase/auth";
 
 // Your web app's Firebase configuration
@@ -28,16 +28,6 @@ const app = initializeApp(firebaseConfig);
 // Initialize Firestore
 const db = getFirestore(app);
 
-// Connect to Firestore emulator in development
-if (process.env.NODE_ENV === 'development' && !db._delegate._settings?.host?.includes('firestore.googleapis.com')) {
-  try {
-    connectFirestoreEmulator(db, 'localhost', 8080);
-    console.log('🔧 Đã kết nối với Firestore Emulator (localhost:8080)');
-  } catch (error) {
-    console.log('⚠️ Firestore Emulator không khả dụng, sử dụng production database');
-  }
-}
-
 // Initialize Auth
 const auth = getAuth(app);
 
@@ -49,102 +39,160 @@ isSupported().then((supported) => {
   }
 });
 
-// Function to authenticate anonymously
-const authenticateAnonymously = async () => {
-  try {
-    const userCredential = await signInAnonymously(auth);
-    console.log('Đã đăng nhập ẩn danh:', userCredential.user.uid);
-    return true;
-  } catch (error) {
-    console.error('Lỗi đăng nhập ẩn danh:', error);
-    return false;
-  }
-};
+// Initialize reCAPTCHA verifier
+let recaptchaVerifier = null;
 
-// Cache để tránh gọi Firebase Auth nhiều lần
-let authCache = {
-  user: null,
-  token: null,
-  lastCheck: 0,
-  cacheTimeout: 5 * 60 * 1000 // 5 phút
-};
-
-// Function to authenticate with phone number (optimized)
-const authenticateWithPhone = async (phoneNumber) => {
-  try {
-    // Kiểm tra cache trước
-    const now = Date.now();
-    if (authCache.user && authCache.token && (now - authCache.lastCheck) < authCache.cacheTimeout) {
-      console.log('Sử dụng cache authentication:', authCache.user.uid);
-      return { success: true, user: authCache.user, fromCache: true };
+const initializeRecaptcha = (elementId) => {
+  // Clear existing verifier if any
+  if (recaptchaVerifier) {
+    try {
+      recaptchaVerifier.clear();
+    } catch (error) {
+      console.log('Clearing existing reCAPTCHA verifier');
     }
-
-    // Kiểm tra nếu đã có user đăng nhập
-    if (auth.currentUser) {
-      console.log('Đã có user đăng nhập:', auth.currentUser.uid);
-      // Cập nhật cache
-      authCache.user = auth.currentUser;
-      authCache.lastCheck = now;
-      return { success: true, user: auth.currentUser };
-    }
-
-    // Tạo custom token cho phone number
-    const customToken = await createCustomToken(phoneNumber);
-    
-    // Đăng nhập với custom token
-    const userCredential = await signInWithCredential(auth, customToken);
-    console.log('Đã đăng nhập với phone:', phoneNumber, 'UID:', userCredential.user.uid);
-    
-    // Cập nhật cache
-    authCache.user = userCredential.user;
-    authCache.lastCheck = now;
-    
-    return { success: true, user: userCredential.user };
-  } catch (error) {
-    console.error('Lỗi đăng nhập với phone:', error);
-    return { success: false, error: error.message };
+    recaptchaVerifier = null;
   }
-};
 
-// Function to create custom token (simplified for demo)
-const createCustomToken = async (phoneNumber) => {
-  // Trong thực tế, bạn sẽ gọi backend để tạo custom token
-  // Ở đây chúng ta sẽ sử dụng anonymous auth với metadata
   try {
-    const userCredential = await signInAnonymously(auth);
-    
-    // Lưu phone number vào user metadata
-    await userCredential.user.updateProfile({
-      displayName: phoneNumber
+    recaptchaVerifier = new RecaptchaVerifier(auth, elementId, {
+      size: 'invisible',
+      callback: (response) => {
+        console.log('reCAPTCHA solved');
+      },
+      'expired-callback': () => {
+        console.log('reCAPTCHA expired');
+        // Clear the verifier when expired
+        recaptchaVerifier = null;
+      }
     });
-    
-    return userCredential.user;
   } catch (error) {
+    console.error('Error initializing reCAPTCHA:', error);
     throw error;
   }
+  return recaptchaVerifier;
 };
 
-// Function to get current user token (optimized with cache)
+// Development fallback for testing without billing
+const sendOTPDev = async (phoneNumber) => {
+  // Simulate OTP sending for development
+  console.log('Development mode: Simulating OTP send to', phoneNumber);
+  
+  return {
+    success: true,
+    confirmationResult: {
+      confirm: async (otp) => {
+        // Simulate OTP verification
+        if (otp === '123456') {
+          return {
+            user: {
+              getIdToken: async () => 'dev-token-' + Date.now()
+            }
+          };
+        } else {
+          throw new Error('Invalid OTP in dev mode');
+        }
+      }
+    },
+    phoneNumber: phoneNumber.startsWith('0') ? `+84${phoneNumber.substring(1)}` : `+84${phoneNumber}`
+  };
+};
+
+// Function to send OTP via Firebase Phone Authentication
+const sendOTP = async (phoneNumber, recaptchaElementId = 'recaptcha-container') => {
+  // Check if we're in development mode and billing is not enabled
+  if (process.env.NODE_ENV === 'development') {
+    try {
+      return await sendOTPDev(phoneNumber);
+    } catch (error) {
+      console.log('Dev mode failed, trying Firebase...');
+    }
+  }
+
+  try {
+    // Format phone number for Firebase (add +84 for Vietnam)
+    const formattedPhone = phoneNumber.startsWith('0') 
+      ? `+84${phoneNumber.substring(1)}` 
+      : `+84${phoneNumber}`;
+
+    // Initialize reCAPTCHA
+    const verifier = initializeRecaptcha(recaptchaElementId);
+
+    // Send OTP
+    const confirmationResult = await signInWithPhoneNumber(auth, formattedPhone, verifier);
+    
+    console.log('OTP sent successfully to:', formattedPhone);
+    
+    return {
+      success: true,
+      confirmationResult,
+      phoneNumber: formattedPhone
+    };
+  } catch (error) {
+    console.error('Error sending OTP:', error);
+    
+    // Handle specific Firebase errors
+    let errorMessage = error.message;
+    if (error.code === 'auth/invalid-phone-number') {
+      errorMessage = 'Số điện thoại không hợp lệ';
+    } else if (error.code === 'auth/too-many-requests') {
+      errorMessage = 'Quá nhiều yêu cầu. Vui lòng thử lại sau';
+    } else if (error.code === 'auth/captcha-check-failed') {
+      errorMessage = 'reCAPTCHA verification thất bại';
+    } else if (error.code === 'auth/billing-not-enabled') {
+      errorMessage = 'Firebase Phone Authentication cần billing được enable. Vui lòng liên hệ admin.';
+    } else if (error.code === 'auth/quota-exceeded') {
+      errorMessage = 'Đã vượt quá giới hạn SMS. Vui lòng thử lại sau.';
+    } else if (error.code === 'auth/app-not-authorized') {
+      errorMessage = 'Ứng dụng chưa được authorize cho Phone Authentication.';
+    }
+    
+    return {
+      success: false,
+      error: errorMessage
+    };
+  }
+};
+
+// Function to verify OTP
+const verifyOTP = async (confirmationResult, otp) => {
+  try {
+    const result = await confirmationResult.confirm(otp);
+    console.log('OTP verified successfully');
+    
+    return {
+      success: true,
+      user: result.user,
+      idToken: await result.user.getIdToken()
+    };
+  } catch (error) {
+    console.error('Error verifying OTP:', error);
+    
+    // Handle specific Firebase errors
+    let errorMessage = error.message;
+    if (error.code === 'auth/invalid-verification-code') {
+      errorMessage = 'Mã OTP không đúng';
+    } else if (error.code === 'auth/code-expired') {
+      errorMessage = 'Mã OTP đã hết hạn';
+    } else if (error.code === 'auth/invalid-verification-id') {
+      errorMessage = 'Mã xác thực không hợp lệ';
+    }
+    
+    return {
+      success: false,
+      error: errorMessage
+    };
+  }
+};
+
+// Function to get current user token
 const getCurrentUserToken = async () => {
   try {
-    // Kiểm tra cache trước
-    const now = Date.now();
-    if (authCache.token && authCache.user && (now - authCache.lastCheck) < authCache.cacheTimeout) {
-      console.log('Sử dụng cached token');
-      return authCache.token;
-    }
-
     if (auth.currentUser) {
-      const token = await auth.currentUser.getIdToken();
-      // Cập nhật cache
-      authCache.token = token;
-      authCache.user = auth.currentUser;
-      authCache.lastCheck = now;
-      return token;
+      return await auth.currentUser.getIdToken();
     }
     return null;
   } catch (error) {
-    console.error('Lỗi lấy token:', error);
+    console.error('Error getting token:', error);
     return null;
   }
 };
@@ -154,18 +202,14 @@ const onAuthStateChange = (callback) => {
   return onAuthStateChanged(auth, callback);
 };
 
-// Function to sign out (clear cache)
+// Function to sign out
 const signOutUser = async () => {
   try {
     await signOut(auth);
-    // Xóa cache
-    authCache.user = null;
-    authCache.token = null;
-    authCache.lastCheck = 0;
-    console.log('Đã đăng xuất và xóa cache');
+    console.log('User signed out successfully');
     return true;
   } catch (error) {
-    console.error('Lỗi đăng xuất:', error);
+    console.error('Error signing out:', error);
     return false;
   }
 };
@@ -175,15 +219,24 @@ const getCurrentUser = () => {
   return auth.currentUser;
 };
 
+// Function to clear reCAPTCHA
+const clearRecaptcha = () => {
+  if (recaptchaVerifier) {
+    recaptchaVerifier.clear();
+    recaptchaVerifier = null;
+  }
+};
+
 export { 
   app, 
   analytics, 
   db, 
   auth, 
-  authenticateAnonymously,
-  authenticateWithPhone,
+  sendOTP,
+  verifyOTP,
   getCurrentUserToken,
   onAuthStateChange,
   signOutUser,
-  getCurrentUser
+  getCurrentUser,
+  clearRecaptcha
 };

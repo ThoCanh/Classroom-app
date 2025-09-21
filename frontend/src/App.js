@@ -2,8 +2,8 @@ import React from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import './App.css';
 import Signin from './pages/Login/Signin';
-import Dbstudent from './pages/student/Dbstudent';
-import DBinstructor from './pages/teacher/DBinstructor';
+import StudentDashboard from './pages/student/StudentDashboard';
+import InstructorDashboard from './pages/teacher/InstructorDashboard';
 
 function App() {
   return (
@@ -12,8 +12,8 @@ function App() {
         <Routes>
           <Route path="/" element={<Signin />} />
           <Route path="/signin" element={<Signin />} />
-          <Route path="/student/Dbstudent" element={<Dbstudent />} />
-          <Route path="/teacher/DBinstructor" element={<DBinstructor />} />
+          <Route path="/student/student-dashboard" element={<StudentDashboard />} />
+          <Route path="/teacher/instructor-dashboard" element={<InstructorDashboard />} />
         </Routes>
       </div>
     </Router>

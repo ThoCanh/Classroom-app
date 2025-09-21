@@ -1,20 +1,25 @@
 // Authentication routes
 const express = require('express');
 const router = express.Router();
+const { sendOTP, verifyOTP, verifyAuth } = require('../controllers/authController');
 
-// POST /api/auth/login
-router.post('/login', (req, res) => {
-  res.json({ message: 'Login endpoint - Coming soon' });
-});
+// POST /api/auth/send-otp
+router.post('/send-otp', sendOTP);
 
-// POST /api/auth/register
-router.post('/register', (req, res) => {
-  res.json({ message: 'Register endpoint - Coming soon' });
-});
+// POST /api/auth/verify-otp
+router.post('/verify-otp', verifyOTP);
 
-// POST /api/auth/logout
-router.post('/logout', (req, res) => {
-  res.json({ message: 'Logout endpoint - Coming soon' });
+// GET /api/auth/verify-token
+router.get('/verify-token', verifyAuth, (req, res) => {
+  res.json({ 
+    success: true, 
+    user: {
+      id: req.user.id,
+      phoneNumber: req.user.phoneNumber,
+      name: req.user.name,
+      role: req.user.role
+    }
+  });
 });
 
 module.exports = router;
