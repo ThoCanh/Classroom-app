@@ -35,6 +35,7 @@ const addStudent = async (req, res) => {
         name: name,
         role: 'student',
         email: email,
+        instructorId: instructorId, // Assign instructor to student
         isActive: true,
         createdAt: new Date(),
         updatedAt: new Date()
@@ -52,6 +53,13 @@ const addStudent = async (req, res) => {
       if (existingUser.role === 'student') {
         studentId = existingUser.id;
         console.log('Using existing student user:', studentId);
+        
+        // Update instructorId for existing student
+        await db.collection('users').doc(studentId).update({
+          instructorId: instructorId,
+          updatedAt: new Date()
+        });
+        console.log('Updated instructorId for existing student:', studentId);
       } else {
         return res.status(400).json({ 
           error: 'Số điện thoại này đã được sử dụng bởi tài khoản khác' 
@@ -134,9 +142,12 @@ const getStudents = async (req, res) => {
       // Get last message time for this student
       let lastMessageTime = null;
       try {
-        const roomName = `chat-${[instructorId, data.studentId].sort().join('-')}`;
+        // Use the same roomId format as socket handler and message controller
+        const sortedIds = [instructorId, data.studentId].sort();
+        const roomId = `conversation_${sortedIds[0]}_${sortedIds[1]}`;
+        
         const lastMessageQuery = await db.collection('messages')
-          .where('roomName', '==', roomName)
+          .where('roomId', '==', roomId)
           .orderBy('timestamp', 'desc')
           .limit(1)
           .get();
@@ -372,11 +383,101 @@ const getLessons = async (req, res) => {
   }
 };
 
+// Assign existing student to instructor
+const assignStudent = async (req, res) => {
+  try {
+    const { studentId, instructorId } = req.body;
+    const currentInstructorId = req.user.id;
+    
+    // Use provided instructorId or current user's ID
+    const targetInstructorId = instructorId || currentInstructorId;
+    
+    console.log('=== ASSIGN STUDENT ===');
+    console.log('Student ID:', studentId);
+    console.log('Instructor ID:', targetInstructorId);
+    
+    if (!studentId) {
+      return res.status(400).json({ error: 'Student ID is required' });
+    }
+    
+    // Check if student exists
+    const studentDoc = await db.collection('users').doc(studentId).get();
+    if (!studentDoc.exists) {
+      return res.status(404).json({ error: 'Student not found' });
+    }
+    
+    const student = studentDoc.data();
+    if (student.role !== 'student') {
+      return res.status(400).json({ error: 'User is not a student' });
+    }
+    
+    // Check if instructor exists
+    const instructorDoc = await db.collection('users').doc(targetInstructorId).get();
+    if (!instructorDoc.exists) {
+      return res.status(404).json({ error: 'Instructor not found' });
+    }
+    
+    const instructor = instructorDoc.data();
+    if (instructor.role !== 'instructor') {
+      return res.status(400).json({ error: 'User is not an instructor' });
+    }
+    
+    // Update student's instructorId
+    await db.collection('users').doc(studentId).update({
+      instructorId: targetInstructorId,
+      updatedAt: new Date()
+    });
+    
+    // Check if relationship already exists
+    const existingRelation = await db.collection('instructorStudents')
+      .where('instructorId', '==', targetInstructorId)
+      .where('studentId', '==', studentId)
+      .limit(1)
+      .get();
+    
+    if (existingRelation.empty) {
+      // Create instructor-student relationship
+      const instructorStudentRef = db.collection('instructorStudents').doc();
+      const instructorStudent = {
+        id: instructorStudentRef.id,
+        instructorId: targetInstructorId,
+        studentId: studentId,
+        studentName: student.name,
+        studentEmail: student.email,
+        studentPhoneNumber: student.phoneNumber,
+        addedAt: new Date(),
+        isActive: true
+      };
+      
+      await instructorStudentRef.set(instructorStudent);
+    }
+    
+    console.log('✅ Student assigned to instructor successfully');
+    
+    res.json({
+      success: true,
+      message: 'Student assigned to instructor successfully',
+      student: {
+        id: studentId,
+        name: student.name,
+        email: student.email,
+        phoneNumber: student.phoneNumber,
+        instructorId: targetInstructorId
+      }
+    });
+    
+  } catch (error) {
+    console.error('Assign student error:', error);
+    res.status(500).json({ error: 'Lỗi hệ thống' });
+  }
+};
+
 module.exports = {
   addStudent,
   getStudents,
   updateStudent,
   deleteStudent,
   createLesson,
-  getLessons
+  getLessons,
+  assignStudent
 };

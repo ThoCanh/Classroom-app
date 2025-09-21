@@ -8,7 +8,8 @@ const {
   updateStudent,
   deleteStudent,
   createLesson,
-  getLessons
+  getLessons,
+  assignStudent
 } = require('../controllers/instructorController');
 
 // Apply authentication middleware to all routes
@@ -26,6 +27,9 @@ router.put('/students/:studentId', updateStudent);
 
 // DELETE /api/instructor/students/:studentId
 router.delete('/students/:studentId', deleteStudent);
+
+// POST /api/instructor/assign-student
+router.post('/assign-student', assignStudent);
 
 // Lesson management routes
 // POST /api/instructor/lessons

@@ -18,25 +18,6 @@ const InstructorDashboard = () => {
   const [lessons, setLessons] = useState([]);
   const [messages, setMessages] = useState([]);
   const [selectedStudent, setSelectedStudent] = useState(null);
-  const [conversations, setConversations] = useState([]);
-  
-  // Debug: Log selectedStudent state changes
-  useEffect(() => {
-    console.log('=== SELECTED STUDENT STATE CHANGED ===');
-    console.log('Selected student:', selectedStudent);
-    console.log('Selected student ID:', selectedStudent?.id);
-    console.log('Selected student name:', selectedStudent?.name);
-  }, [selectedStudent]);
-
-  // Auto-refresh students every 30 seconds to get new students and update last message times
-  useEffect(() => {
-    const interval = setInterval(() => {
-      console.log('=== AUTO-REFRESHING STUDENTS ===');
-      loadStudents();
-    }, 30000); // 30 seconds
-
-    return () => clearInterval(interval);
-  }, []);
   
   // Form states
   const [showStudentForm, setShowStudentForm] = useState(false);
@@ -47,139 +28,49 @@ const InstructorDashboard = () => {
   // Loading states
   const [isLoadingStudents, setIsLoadingStudents] = useState(false);
   const [isLoadingLessons, setIsLoadingLessons] = useState(false);
-  const [isLoadingMessages, setIsLoadingMessages] = useState(false);
 
   // Check authentication and load data
   useEffect(() => {
-    console.log('=== INSTRUCTOR DASHBOARD INITIALIZATION ===');
-    const token = localStorage.getItem('token');
-    const userData = localStorage.getItem('user');
-    
-    console.log('Token exists:', !!token);
-    console.log('User data exists:', !!userData);
-    
-    if (!token || !userData) {
-      console.log('❌ Missing token or user data, redirecting to signin');
-      navigate('/signin');
-      return;
-    }
-
-    try {
-      const parsedUser = JSON.parse(userData);
-      console.log('Parsed user data:', parsedUser);
-      console.log('User role:', parsedUser.role);
-      console.log('User ID:', parsedUser.id);
+    const initializeApp = async () => {
+      const token = localStorage.getItem('token');
+      const userData = localStorage.getItem('user');
       
-      if (parsedUser.role !== 'instructor') {
-        console.log('❌ User is not instructor, redirecting to signin');
+      if (!token || !userData) {
         navigate('/signin');
         return;
       }
-      
-      console.log('✅ User is instructor, setting user and loading data');
-      setUser(parsedUser);
-      loadInitialData();
-      
-      
-    } catch (error) {
-      console.error('Error parsing user data:', error);
-      navigate('/signin');
-    }
-    
-    setIsLoading(false);
-    
-  }, [navigate]);
 
-  const loadInitialData = async () => {
-    console.log('=== LOADING INITIAL DATA ===');
-    console.log('User data:', user);
-    console.log('User ID:', user?.id);
-    
-    try {
-      await Promise.all([
-        loadStudents(),
-        loadLessons()
-      ]);
-      console.log('✅ Initial data loaded successfully');
-    } catch (error) {
-      console.error('❌ Error loading initial data:', error);
-    }
-  };
-
-  const createConversations = () => {
-    console.log('=== CREATE CONVERSATIONS ===');
-    console.log('createConversations called with students:', students);
-    console.log('Students length:', students.length);
-    
-    if (!students || students.length === 0) {
-      console.log('⚠️ NO STUDENTS AVAILABLE - Setting empty conversations');
-      console.log('This is why the chat shows "Chưa có cuộc trò chuyện nào"');
-      setConversations([]);
-      return;
-    }
-    
-    const convs = students.map(student => {
-      let lastMessage = 'Chưa có tin nhắn';
-      if (student.lastMessageTime) {
-        const lastTime = new Date(student.lastMessageTime);
-        const now = new Date();
-        const diffMs = now - lastTime;
-        const diffMins = Math.floor(diffMs / (1000 * 60));
-        const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
-        const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-        
-        if (diffMins < 1) {
-          lastMessage = 'Vừa xong';
-        } else if (diffMins < 60) {
-          lastMessage = `${diffMins} phút trước`;
-        } else if (diffHours < 24) {
-          lastMessage = `${diffHours} giờ trước`;
-        } else if (diffDays < 7) {
-          lastMessage = `${diffDays} ngày trước`;
-        } else {
-          lastMessage = lastTime.toLocaleDateString('vi-VN');
+      try {
+        const parsedUser = JSON.parse(userData);
+        if (parsedUser.role !== 'instructor') {
+          navigate('/signin');
+          return;
         }
+
+        setUser(parsedUser);
+        
+        // Load initial data
+        await loadStudents();
+        await loadLessons();
+        
+      } catch (error) {
+        console.error('Error initializing app:', error);
+        navigate('/signin');
       }
       
-      return {
-        id: student.id,
-        name: student.name,
-        phone: student.phoneNumber,
-        email: student.email,
-        lastMessage: lastMessage,
-        lastMessageTime: student.lastMessageTime
-      };
-    });
-    
-    // Debug: Log để kiểm tra dữ liệu
-    console.log('Students data:', students);
-    console.log('Conversations created:', convs);
-    console.log('✅ Conversations will be displayed in chat');
-    
-    setConversations(convs);
-  };
+      setIsLoading(false);
+    };
 
+    initializeApp();
+  }, [navigate]);
+
+  // Load students
   const loadStudents = async () => {
     try {
-      console.log('=== LOADING STUDENTS ===');
       setIsLoadingStudents(true);
       const response = await instructorAPI.getStudents();
-      console.log('API Response:', response.data);
-      
       if (response.data.success) {
-        console.log('Students from API:', response.data.students);
-        console.log('Number of students:', response.data.students.length);
-        
-        if (response.data.students.length === 0) {
-          console.log('⚠️ NO STUDENTS FOUND - This is why chat is empty');
-          console.log('Please add students first using the "Thêm học sinh" button');
-        }
-        
-        setStudents(response.data.students);
-        console.log('About to call createConversations');
-        createConversations();
-      } else {
-        console.error('API returned success: false');
+        setStudents(response.data.students || []);
       }
     } catch (error) {
       console.error('Error loading students:', error);
@@ -188,42 +79,18 @@ const InstructorDashboard = () => {
     }
   };
 
+  // Load lessons
   const loadLessons = async () => {
     try {
       setIsLoadingLessons(true);
       const response = await instructorAPI.getLessons();
       if (response.data.success) {
-        setLessons(response.data.lessons);
+        setLessons(response.data.lessons || []);
       }
     } catch (error) {
       console.error('Error loading lessons:', error);
     } finally {
       setIsLoadingLessons(false);
-    }
-  };
-
-  const loadMessages = async (studentId) => {
-    try {
-      console.log('=== LOADING MESSAGES ===');
-      console.log('Loading messages for student:', studentId);
-      setIsLoadingMessages(true);
-      
-      // Clear previous messages
-      setMessages([]);
-      console.log('Messages cleared');
-      
-      // TODO: Implement message loading logic here
-      console.log('Message loading not implemented yet');
-      
-      // Set timeout để đảm bảo loading được tắt
-      setTimeout(() => {
-        console.log('Timeout: Setting isLoadingMessages to false');
-        setIsLoadingMessages(false);
-      }, 1000);
-      
-    } catch (error) {
-      console.error('Error loading messages:', error);
-      setIsLoadingMessages(false);
     }
   };
 
@@ -233,8 +100,7 @@ const InstructorDashboard = () => {
       const response = await instructorAPI.addStudent(studentData);
       if (response.data.success) {
         setShowStudentForm(false);
-        console.log('Student added successfully, reloading students...');
-        await loadStudents(); // ✅ Reload students after adding
+        await loadStudents();
         alert('Thêm học sinh thành công!');
       }
     } catch (error) {
@@ -249,7 +115,7 @@ const InstructorDashboard = () => {
       if (response.data.success) {
         setShowStudentForm(false);
         setEditingStudent(null);
-        loadStudents();
+        await loadStudents();
         alert('Cập nhật học sinh thành công!');
       }
     } catch (error) {
@@ -259,11 +125,15 @@ const InstructorDashboard = () => {
   };
 
   const handleDeleteStudent = async (studentId) => {
-    if (window.confirm('Bạn có chắc chắn muốn xóa học sinh này?')) {
+    if (window.confirm('Bạn có chắc muốn xóa học sinh này?')) {
       try {
         const response = await instructorAPI.deleteStudent(studentId);
         if (response.data.success) {
-          loadStudents();
+          await loadStudents();
+          if (selectedStudent && selectedStudent.id === studentId) {
+            setSelectedStudent(null);
+            setMessages([]);
+          }
           alert('Xóa học sinh thành công!');
         }
       } catch (error) {
@@ -274,77 +144,78 @@ const InstructorDashboard = () => {
   };
 
   // Lesson management
-  const handleCreateLesson = async (lessonData) => {
+  const handleAddLesson = async (lessonData) => {
     try {
-      const response = await instructorAPI.createLesson(lessonData);
+      const response = await instructorAPI.addLesson(lessonData);
       if (response.data.success) {
         setShowLessonForm(false);
-        loadLessons();
-        alert('Tạo bài học thành công!');
+        await loadLessons();
+        alert('Thêm bài học thành công!');
       }
     } catch (error) {
-      console.error('Error creating lesson:', error);
-      alert('Lỗi khi tạo bài học: ' + (error.response?.data?.error || error.message));
+      console.error('Error adding lesson:', error);
+      alert('Lỗi khi thêm bài học: ' + (error.response?.data?.error || error.message));
     }
   };
 
-  // Chat management
-  const handleSendMessage = (messageData) => {
+  const handleUpdateLesson = async (lessonData) => {
     try {
-      console.log('=== INSTRUCTOR DASHBOARD HANDLE SEND MESSAGE ===');
-      console.log('Message data:', messageData);
-      console.log('Selected student:', selectedStudent);
-      
-      // TODO: Implement message sending logic here
-      console.log('Message sending not implemented yet');
-      
+      const response = await instructorAPI.updateLesson(editingLesson.id, lessonData);
+      if (response.data.success) {
+        setShowLessonForm(false);
+        setEditingLesson(null);
+        await loadLessons();
+        alert('Cập nhật bài học thành công!');
+      }
     } catch (error) {
-      console.error('Error sending message:', error);
+      console.error('Error updating lesson:', error);
+      alert('Lỗi khi cập nhật bài học: ' + (error.response?.data?.error || error.message));
     }
   };
 
-  const handleReceiveMessage = (message) => {
-    console.log('=== INSTRUCTOR DASHBOARD RECEIVED MESSAGE ===');
-    console.log('Received message:', message);
-    console.log('Current messages:', messages);
-    setMessages(prev => {
-      const newMessages = [...prev, message];
-      console.log('Updated messages:', newMessages);
-      return newMessages;
-    });
+
+
+
+
+  // Chat management - placeholder (no socket)
+  const handleSelectStudent = (student) => {
+    console.log('=== STUDENT SELECTED (NO SOCKET) ===');
+    console.log('Selected student:', student);
+    setSelectedStudent(student);
     
-    // Refresh conversations to update last message time
-    setTimeout(() => {
-      console.log('Refreshing conversations after message received');
-      loadStudents();
-    }, 1000);
-  };
-
-  const handleMessageSent = (message) => {
-    console.log('=== INSTRUCTOR DASHBOARD MESSAGE SENT CONFIRMATION ===');
-    console.log('Message sent confirmation:', message);
-    console.log('Current messages:', messages);
-    setMessages(prev => {
-      const newMessages = [...prev, message];
-      console.log('Updated messages after sent confirmation:', newMessages);
-      return newMessages;
-    });
+    // Mock loading some messages (in real app, this would be from API/database)
+    setMessages([]);
     
-    // Refresh conversations to update last message time
-    setTimeout(() => {
-      console.log('Refreshing conversations after message sent');
-      loadStudents();
-    }, 1000);
+    // Show offline status
+    alert('Chat offline - Socket.IO đã bị xóa. Chức năng chat không khả dụng.');
   };
 
-  const handleSelectConversation = (conversation) => {
-    const student = students.find(s => s.id === conversation.id);
-    if (student) {
-      setSelectedStudent(student);
-      loadMessages(student.id);
-    }
+  const handleSendMessage = (messageData) => {
+    console.log('=== SEND MESSAGE (NO SOCKET) ===');
+    console.log('Message data:', messageData);
+    
+    // For now, just add the message to local state
+    const newMessage = {
+      id: Date.now().toString(),
+      message: messageData.message,
+      senderId: messageData.senderId,
+      senderName: user?.name || 'Giáo viên',
+      senderRole: 'instructor',
+      receiverId: messageData.receiverId,
+      receiverRole: 'student',
+      timestamp: new Date(),
+      delivered: false
+    };
+    
+    setMessages(prev => [...prev, newMessage]);
+    
+    alert('Chat chưa được kết nối (Socket.IO đã bị xóa)');
   };
 
+
+
+
+  // Sign out
   const handleSignOut = () => {
     localStorage.removeItem('token');
     localStorage.removeItem('user');
@@ -489,12 +360,10 @@ const InstructorDashboard = () => {
                               onClick={() => {
                                 console.log('=== CHAT BUTTON CLICKED ===');
                                 console.log('Student clicked:', student);
-                                console.log('Current conversations:', conversations);
                                 console.log('Current selectedStudent:', selectedStudent);
                                 
-                                setSelectedStudent(student);
+                                handleSelectStudent(student);
                                 setActiveTab('chat');
-                                loadMessages(student.id);
                                 
                                 console.log('After setting selectedStudent:', student);
                                 console.log('After setting activeTab: chat');
@@ -563,19 +432,7 @@ const InstructorDashboard = () => {
                 receiverId={selectedStudent?.id}
                 senderRole="instructor"
                 receiverRole="student"
-                isLoading={isLoadingMessages}
-                conversations={conversations}
-                onSelectConversation={handleSelectConversation}
-                selectedConversation={(() => {
-                  const selectedConv = selectedStudent ? conversations.find(c => c.id === selectedStudent.id) : null;
-                  console.log('=== CHATBOX RENDER DEBUG ===');
-                  console.log('selectedStudent:', selectedStudent);
-                  console.log('conversations:', conversations);
-                  console.log('selectedConversation:', selectedConv);
-                  console.log('messages:', messages);
-                  console.log('isLoadingMessages:', isLoadingMessages);
-                  return selectedConv;
-                })()}
+                isLoading={false}
               />
             </div>
           )}
@@ -596,7 +453,7 @@ const InstructorDashboard = () => {
 
       {showLessonForm && (
         <LessonForm
-          onSubmit={handleCreateLesson}
+          onSubmit={editingLesson ? handleUpdateLesson : handleAddLesson}
           onCancel={() => {
             setShowLessonForm(false);
             setEditingLesson(null);

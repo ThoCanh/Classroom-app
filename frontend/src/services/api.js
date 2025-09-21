@@ -60,8 +60,13 @@ export const studentAPI = {
   updateProfile: (data) => api.put('/student/profile', data),
   getLessons: () => api.get('/student/lessons'),
   completeLesson: (lessonId) => api.put(`/student/lessons/${lessonId}/complete`),
-  getMessages: (instructorId) => api.get(`/student/messages/${instructorId}`),
-  sendMessage: (data) => api.post('/student/messages', data),
+};
+
+// Message API
+export const messageAPI = {
+  getConversations: () => api.get('/messages/conversations'),
+  getMessages: (receiverId) => api.get(`/messages/messages/${receiverId}`),
+  sendMessage: (data) => api.post('/messages/send', data),
 };
 
 export default api;

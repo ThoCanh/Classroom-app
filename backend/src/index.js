@@ -1,13 +1,11 @@
 const express = require('express');
 const cors = require('cors');
-const http = require('http');
 require('dotenv').config();
 
 // Import routes
 const apiRoutes = require('./routes');
 
 const app = express();
-const server = http.createServer(app);
 
 const PORT = process.env.PORT || 5000;
 
@@ -28,6 +26,6 @@ app.get('/', (req, res) => {
 app.use('/api', apiRoutes);
 
 // Start server
-server.listen(PORT, () => {
+app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
 });

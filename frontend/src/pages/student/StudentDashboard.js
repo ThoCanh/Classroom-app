@@ -29,124 +29,86 @@ const StudentDashboard = () => {
   // Loading states
   const [isLoadingProfile, setIsLoadingProfile] = useState(false);
   const [isLoadingLessons, setIsLoadingLessons] = useState(false);
-  const [isLoadingMessages, setIsLoadingMessages] = useState(false);
 
   // Check authentication and load data
   useEffect(() => {
-    const token = localStorage.getItem('token');
-    const userData = localStorage.getItem('user');
-    
-    if (!token || !userData) {
-      navigate('/signin');
-      return;
-    }
-
-    try {
-      const parsedUser = JSON.parse(userData);
-      if (parsedUser.role !== 'student') {
+    const initializeApp = async () => {
+      const token = localStorage.getItem('token');
+      const userData = localStorage.getItem('user');
+      
+      if (!token || !userData) {
         navigate('/signin');
         return;
       }
-      
-      setUser(parsedUser);
-      loadInitialData();
-      
-    } catch (error) {
-      console.error('Error parsing user data:', error);
-      navigate('/signin');
-    }
-    
-    setIsLoading(false);
-    
-  }, [navigate]);
 
-  const loadInitialData = async () => {
-    await Promise.all([
-      loadProfile(),
-      loadLessons()
-    ]);
-  };
-
-  const loadProfile = async () => {
-    try {
-      console.log('=== LOADING STUDENT PROFILE ===');
-      setIsLoadingProfile(true);
-      const response = await studentAPI.getProfile();
-      console.log('Profile API response:', response.data);
-      
-      if (response.data.success) {
-        console.log('Profile data:', response.data.profile);
-        setProfile(response.data.profile);
-        setInstructorId(response.data.profile.instructorId);
-        console.log('Set instructorId:', response.data.profile.instructorId);
-        
-        // Set instructor name if available
-        if (response.data.profile.instructorName) {
-          setInstructorName(response.data.profile.instructorName);
-          console.log('Set instructorName:', response.data.profile.instructorName);
-        } else {
-          setInstructorName('Instructor'); // Default name
-          console.log('Set default instructorName: Instructor');
+      try {
+        const parsedUser = JSON.parse(userData);
+        if (parsedUser.role !== 'student') {
+          navigate('/signin');
+          return;
         }
         
-        setProfileFormData({
-          name: response.data.profile.name,
-          email: response.data.profile.email,
-          phoneNumber: response.data.profile.phoneNumber
-        });
-      } else {
-        console.log('Profile API returned success: false');
+        setUser(parsedUser);
+        
+        // Load profile
+        try {
+          console.log('=== LOADING STUDENT PROFILE ===');
+          setIsLoadingProfile(true);
+          const response = await studentAPI.getProfile();
+          console.log('Profile API response:', response.data);
+          
+          if (response.data.success) {
+            console.log('Profile data:', response.data.profile);
+            setProfile(response.data.profile);
+            setInstructorId(response.data.profile.instructorId);
+            console.log('Set instructorId:', response.data.profile.instructorId);
+            
+            // Set instructor name if available
+            if (response.data.profile.instructorName) {
+              setInstructorName(response.data.profile.instructorName);
+              console.log('Set instructorName:', response.data.profile.instructorName);
+            } else {
+              setInstructorName('Instructor'); // Default name
+              console.log('Set default instructorName: Instructor');
+            }
+            
+            setProfileFormData({
+              name: response.data.profile.name,
+              email: response.data.profile.email,
+              phoneNumber: response.data.profile.phoneNumber
+            });
+          } else {
+            console.log('Profile API returned success: false');
+          }
+        } catch (error) {
+          console.error('Error loading profile:', error);
+        } finally {
+          setIsLoadingProfile(false);
+        }
+        
+        // Load lessons
+        try {
+          setIsLoadingLessons(true);
+          const response = await studentAPI.getLessons();
+          if (response.data.success) {
+            setLessons(response.data.lessons);
+          }
+        } catch (error) {
+          console.error('Error loading lessons:', error);
+        } finally {
+          setIsLoadingLessons(false);
+        }
+        
+      } catch (error) {
+        console.error('Error parsing user data:', error);
+        navigate('/signin');
       }
-    } catch (error) {
-      console.error('Error loading profile:', error);
-    } finally {
-      setIsLoadingProfile(false);
-    }
-  };
+      
+      setIsLoading(false);
+    };
 
-  const loadLessons = async () => {
-    try {
-      setIsLoadingLessons(true);
-      const response = await studentAPI.getLessons();
-      if (response.data.success) {
-        setLessons(response.data.lessons);
-      }
-    } catch (error) {
-      console.error('Error loading lessons:', error);
-    } finally {
-      setIsLoadingLessons(false);
-    }
-  };
-
-  const loadMessages = async () => {
-    if (!instructorId) {
-      console.log('❌ No instructorId, cannot load messages');
-      return;
-    }
-    
-    try {
-      console.log('=== STUDENT LOADING MESSAGES ===');
-      console.log('Loading messages for instructor:', instructorId);
-      setIsLoadingMessages(true);
-      
-      // Clear previous messages
-      setMessages([]);
-      console.log('Messages cleared');
-      
-      // TODO: Implement message loading logic here
-      console.log('Message loading not implemented yet');
-      
-      // Set timeout để đảm bảo loading được tắt
-      setTimeout(() => {
-        console.log('Timeout: Setting isLoadingMessages to false');
-        setIsLoadingMessages(false);
-      }, 1000);
-      
-    } catch (error) {
-      console.error('Error loading messages:', error);
-      setIsLoadingMessages(false);
-    }
-  };
+    initializeApp();
+  }, [navigate]);
 
   // Profile management
   const handleUpdateProfile = async () => {
@@ -154,12 +116,25 @@ const StudentDashboard = () => {
       const response = await studentAPI.updateProfile(profileFormData);
       if (response.data.success) {
         setShowProfileForm(false);
-        loadProfile();
-        alert('Cập nhật hồ sơ thành công!');
+        
+        // Reload profile
+        try {
+          const profileResponse = await studentAPI.getProfile();
+          if (profileResponse.data.success) {
+            const profileData = profileResponse.data.profile;
+            setProfile(profileData);
+            setInstructorId(profileData.instructorId);
+            setInstructorName(profileData.instructorName || 'Giáo viên');
+          }
+        } catch (error) {
+          console.error('Error reloading profile:', error);
+        }
+        
+        alert('Cập nhật thông tin thành công!');
       }
     } catch (error) {
       console.error('Error updating profile:', error);
-      alert('Lỗi khi cập nhật hồ sơ: ' + (error.response?.data?.error || error.message));
+      alert('Lỗi khi cập nhật thông tin: ' + (error.response?.data?.error || error.message));
     }
   };
 
@@ -168,8 +143,12 @@ const StudentDashboard = () => {
     try {
       const response = await studentAPI.completeLesson(lessonId);
       if (response.data.success) {
-        loadLessons();
-        alert('Đánh dấu hoàn thành bài học thành công!');
+        // Reload lessons to update completion status
+        const lessonsResponse = await studentAPI.getLessons();
+        if (lessonsResponse.data.success) {
+          setLessons(lessonsResponse.data.lessons || []);
+        }
+        alert('Đã hoàn thành bài học!');
       }
     } catch (error) {
       console.error('Error completing lesson:', error);
@@ -177,64 +156,35 @@ const StudentDashboard = () => {
     }
   };
 
-  // Chat management
+  // Chat management - placeholder (no socket)
   const handleSendMessage = (messageData) => {
-    console.log('=== STUDENT DASHBOARD HANDLE SEND MESSAGE ===');
+    console.log('=== SEND MESSAGE (NO SOCKET - STUDENT) ===');
     console.log('Message data:', messageData);
-    console.log('Instructor ID:', instructorId);
     
-    if (!instructorId) {
-      console.log('ERROR: No instructor ID found');
-      alert('Không tìm thấy thông tin giáo viên');
-      return;
-    }
+    // For now, just add the message to local state
+    const newMessage = {
+      id: Date.now().toString(),
+      message: messageData.message,
+      senderId: messageData.senderId,
+      senderName: user?.name || 'Học sinh',
+      senderRole: 'student',
+      receiverId: messageData.receiverId,
+      receiverRole: 'instructor',
+      timestamp: new Date(),
+      delivered: false
+    };
     
-    try {
-      // TODO: Implement message sending logic here
-      console.log('Message sending not implemented yet');
-      
-    } catch (error) {
-      console.error('Error sending message:', error);
-    }
+    setMessages(prev => [...prev, newMessage]);
+    
+    alert('Chat chưa được kết nối (Socket.IO đã bị xóa)');
   };
 
-  const handleReceiveMessage = (message) => {
-    console.log('=== STUDENT DASHBOARD RECEIVED MESSAGE ===');
-    console.log('Received message:', message);
-    console.log('Current messages:', messages);
-    setMessages(prev => {
-      const newMessages = [...prev, message];
-      console.log('Updated messages:', newMessages);
-      return newMessages;
-    });
-  };
-
-  const handleMessageSent = (message) => {
-    console.log('=== STUDENT DASHBOARD MESSAGE SENT CONFIRMATION ===');
-    console.log('Message sent confirmation:', message);
-    console.log('Current messages:', messages);
-    setMessages(prev => {
-      const newMessages = [...prev, message];
-      console.log('Updated messages after sent confirmation:', newMessages);
-      return newMessages;
-    });
-  };
-
+  // Sign out
   const handleSignOut = () => {
     localStorage.removeItem('token');
     localStorage.removeItem('user');
     navigate('/signin');
   };
-
-  // Load messages when switching to chat tab
-  useEffect(() => {
-    if (activeTab === 'chat' && instructorId) {
-      console.log('=== STUDENT DASHBOARD LOADING MESSAGES ===');
-      console.log('activeTab:', activeTab);
-      console.log('instructorId:', instructorId);
-      loadMessages();
-    }
-  }, [activeTab, instructorId]);
 
   if (isLoading) {
     return (
@@ -300,7 +250,19 @@ const StudentDashboard = () => {
                 <div className="section-actions">
                   <button 
                     className="btn btn-secondary"
-                    onClick={loadLessons}
+                    onClick={async () => {
+                      try {
+                        setIsLoadingLessons(true);
+                        const response = await studentAPI.getLessons();
+                        if (response.data.success) {
+                          setLessons(response.data.lessons);
+                        }
+                      } catch (error) {
+                        console.error('Error loading lessons:', error);
+                      } finally {
+                        setIsLoadingLessons(false);
+                      }
+                    }}
                     disabled={isLoadingLessons}
                   >
                     🔄 Tải lại
@@ -319,13 +281,6 @@ const StudentDashboard = () => {
 
           {activeTab === 'chat' && (
             <div className="chat-section">
-              {console.log('=== STUDENT DASHBOARD CHAT SECTION ===')}
-              {console.log('activeTab:', activeTab)}
-              {console.log('instructorId:', instructorId)}
-              {console.log('instructorName:', instructorName)}
-              {console.log('messages:', messages)}
-              {console.log('isLoadingMessages:', isLoadingMessages)}
-              
               <div className="section-header">
                 <h2>💬 Chat với giáo viên</h2>
                 {instructorId && (
@@ -336,31 +291,21 @@ const StudentDashboard = () => {
               </div>
 
               {instructorId ? (
-                <>
-                  {console.log('=== RENDERING STUDENT CHAT BOX ===')}
-                  {console.log('instructorId exists:', !!instructorId)}
-                  {console.log('instructorName:', instructorName)}
-                  <StudentChatBox
-                    messages={messages}
-                    onSendMessage={handleSendMessage}
-                    currentUserId={user.id}
-                    instructorId={instructorId}
-                    instructorName={instructorName}
-                    isLoading={isLoadingMessages}
-                  />
-                </>
+                <StudentChatBox
+                  messages={messages}
+                  onSendMessage={handleSendMessage}
+                  currentUserId={user.id}
+                  instructorId={instructorId}
+                  instructorName={instructorName}
+                  isLoading={false}
+                />
               ) : (
-                <>
-                  {console.log('=== NO INSTRUCTOR ID ===')}
-                  {console.log('instructorId:', instructorId)}
-                  {console.log('profile:', profile)}
-                  <div className="no-instructor">
-                    <p>Chưa có thông tin giáo viên</p>
-                    <p style={{ fontSize: '12px', color: '#666', marginTop: '10px' }}>
-                      Vui lòng liên hệ quản trị viên để được assign giáo viên
-                    </p>
-                  </div>
-                </>
+                <div className="no-instructor">
+                  <p>Chưa có thông tin giáo viên</p>
+                  <p style={{ fontSize: '12px', color: '#666', marginTop: '10px' }}>
+                    Vui lòng liên hệ quản trị viên để được assign giáo viên
+                  </p>
+                </div>
               )}
             </div>
           )}

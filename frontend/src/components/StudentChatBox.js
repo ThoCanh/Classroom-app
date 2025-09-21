@@ -6,54 +6,34 @@ const StudentChatBox = ({
   onSendMessage, 
   currentUserId, 
   instructorId,
-  instructorName,
-  isLoading = false
+  instructorName = 'Giáo viên'
 }) => {
   const [newMessage, setNewMessage] = useState('');
-  const [selectedConversation, setSelectedConversation] = useState(null);
   const messagesEndRef = useRef(null);
 
-  // Create instructor conversation
-  const instructorConversation = {
-    id: instructorId,
-    name: instructorName || 'Instructor',
-    lastMessage: messages.length > 0 ? messages[messages.length - 1].message : 'Hello',
-    avatar: '👨‍🏫'
-  };
-
-  // Set selected conversation to instructor by default
+  // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
-    if (instructorId && !selectedConversation) {
-      setSelectedConversation(instructorConversation);
-    }
-  }, [instructorId]);
+    scrollToBottom();
+  }, [messages]);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
-  useEffect(() => {
-    scrollToBottom();
-  }, [messages]);
-
-  // Setup Socket.IO listeners
-  useEffect(() => {
-    console.log('=== STUDENT CHAT BOX SETTING UP LISTENERS ===');
-    console.log('instructorId:', instructorId);
-    
-    // TODO: Implement Socket.IO listeners here
-    console.log('Socket.IO listeners not implemented yet');
-    
-    // Cleanup listeners on unmount
-    return () => {
-      console.log('=== STUDENT CHAT BOX CLEANING UP LISTENERS ===');
-      // TODO: Cleanup Socket.IO listeners here
-    };
-  }, [instructorId, onSendMessage]);
-
+  // Handle send message
   const handleSendMessage = (e) => {
     e.preventDefault();
-    if (newMessage.trim()) {
+    
+    if (!newMessage.trim()) {
+      return;
+    }
+    
+    console.log('=== STUDENT CHAT BOX SEND MESSAGE ===');
+    console.log('Message:', newMessage.trim());
+    console.log('Current User ID:', currentUserId);
+    console.log('Instructor ID:', instructorId);
+    
+    if (onSendMessage) {
       const messageData = {
         message: newMessage.trim(),
         senderId: currentUserId,
@@ -62,187 +42,88 @@ const StudentChatBox = ({
         receiverRole: 'instructor'
       };
       
-      onSendMessage && onSendMessage(messageData);
+      onSendMessage(messageData);
       setNewMessage('');
     }
   };
 
   const formatTime = (timestamp) => {
-    const date = new Date(timestamp);
-    return date.toLocaleTimeString('vi-VN', { 
-      hour: '2-digit', 
-      minute: '2-digit' 
-    });
+    if (!timestamp) return '';
+    
+    try {
+      const date = new Date(timestamp);
+      return date.toLocaleTimeString('vi-VN', { 
+        hour: '2-digit', 
+        minute: '2-digit' 
+      });
+    } catch (error) {
+      return '';
+    }
   };
 
   return (
-    <div 
-      className="student-chat-interface"
-      style={{
-        display: 'flex',
-        height: '100vh',
-        background: 'white',
-        fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
-        borderLeft: '3px solid #007bff'
-      }}
-    >
-      {console.log('=== STUDENT CHAT BOX RENDERING ===')}
-      {console.log('instructorId:', instructorId)}
-      {console.log('instructorName:', instructorName)}
-      {console.log('messages:', messages)}
-      {console.log('selectedConversation:', selectedConversation)}
-      {console.log('instructorConversation:', instructorConversation)}
-      
-      {/* Left Column - Conversations List */}
-      <div 
-        className="conversations-panel"
-        style={{
-          width: '25%',
-          background: '#f8f9fa',
-          borderRight: '1px solid #e0e0e0',
-          display: 'flex',
-          flexDirection: 'column'
-        }}
-      >
-        <div className="conversations-header">
-          <h3>Conversations</h3>
-        </div>
-        
-        <div className="conversations-list">
-          <div 
-            className={`conversation-item ${selectedConversation?.id === instructorConversation.id ? 'active' : ''}`}
-            onClick={() => setSelectedConversation(instructorConversation)}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              padding: '12px',
-              marginBottom: '8px',
-              background: selectedConversation?.id === instructorConversation.id ? '#e3f2fd' : 'white',
-              borderRadius: '8px',
-              cursor: 'pointer',
-              border: selectedConversation?.id === instructorConversation.id ? '1px solid #007bff' : '1px solid #e0e0e0'
-            }}
-          >
-            <div className="conversation-avatar">
-              <div 
-                className="avatar-placeholder"
-                style={{
-                  width: '40px',
-                  height: '40px',
-                  borderRadius: '50%',
-                  background: '#e0e0e0',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  fontSize: '18px',
-                  color: '#666',
-                  marginRight: '12px'
-                }}
-              >
-                👨‍🏫
-              </div>
+    <div className="student-chat-box">
+      {/* Chat Header */}
+      <div className="chat-header">
+        <h3>Chat với {instructorName}</h3>
+      </div>
+
+      {/* Messages Area */}
+      <div className="messages-container">
+        <div className="messages-list">
+          {messages.length === 0 ? (
+            <div className="no-messages">
+              <p>Chưa có tin nhắn nào</p>
+              <small>Hãy gửi tin nhắn đầu tiên cho giáo viên!</small>
             </div>
-            <div className="conversation-content">
-              <div className="conversation-name">{instructorConversation.name}</div>
-              <div className="conversation-preview">{instructorConversation.lastMessage}</div>
-            </div>
-          </div>
+          ) : (
+            messages.map((message) => {
+              const isOwn = message.senderId === currentUserId;
+              const senderName = isOwn ? 'Bạn' : (message.senderName || instructorName);
+              
+              return (
+                <div key={message.id} className={`message-item ${isOwn ? 'own' : 'other'}`}>
+                  <div className="message-content">
+                    <div className="message-header">
+                      <span className="message-sender">{senderName}</span>
+                      <span className="message-time">{formatTime(message.timestamp)}</span>
+                    </div>
+                    
+                    <div className="message-text">
+                      {message.message}
+                    </div>
+                  </div>
+                </div>
+              );
+            })
+          )}
+          
+          <div ref={messagesEndRef} />
         </div>
       </div>
 
-      {/* Right Column - Chat Area */}
-      <div 
-        className="chat-panel"
-        style={{
-          flex: 1,
-          display: 'flex',
-          flexDirection: 'column',
-          background: 'white'
-        }}
-      >
-        <div className="chat-header">
-          <h3>Chat Area</h3>
-        </div>
-        
-        {selectedConversation ? (
-          <>
-            <div className="chat-messages">
-              {messages.length === 0 ? (
-                <div className="no-messages">
-                  <p>Chưa có tin nhắn nào. Hãy bắt đầu cuộc trò chuyện!</p>
-                </div>
-              ) : (
-                messages.map((message) => (
-                  <div
-                    key={message.id}
-                    className={`message ${message.senderId === currentUserId ? 'sent' : 'received'}`}
-                  >
-                    <div className="message-content">
-                      <p>{message.message}</p>
-                      <span className="message-time">
-                        {formatTime(message.timestamp)}
-                      </span>
-                    </div>
-                  </div>
-                ))
-              )}
-              <div ref={messagesEndRef} />
-            </div>
-
-            <form 
-              className="chat-input" 
-              onSubmit={handleSendMessage}
-              style={{
-                display: 'flex',
-                padding: '20px',
-                background: '#f8f9fa',
-                borderTop: '1px solid #e0e0e0',
-                alignItems: 'center',
-                gap: '12px'
-              }}
+      {/* Message Input */}
+      <div className="message-input-container">
+        <form onSubmit={handleSendMessage} className="message-input-form">
+          <div className="input-group">
+            <input
+              type="text"
+              value={newMessage}
+              onChange={(e) => setNewMessage(e.target.value)}
+              placeholder={`Nhắn tin cho ${instructorName}...`}
+              className="message-input"
+            />
+            
+            <button 
+              type="submit" 
+              className="send-button"
+              disabled={!newMessage.trim()}
             >
-              <input
-                type="text"
-                value={newMessage}
-                onChange={(e) => setNewMessage(e.target.value)}
-                placeholder="Reply message"
-                disabled={isLoading}
-                style={{
-                  flex: 1,
-                  padding: '12px 16px',
-                  border: '1px solid #e0e0e0',
-                  borderRadius: '20px',
-                  fontSize: '14px',
-                  background: 'white',
-                  outline: 'none'
-                }}
-              />
-              <button 
-                type="submit" 
-                disabled={!newMessage.trim() || isLoading}
-                style={{
-                  padding: '12px',
-                  background: '#007bff',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '50%',
-                  width: '44px',
-                  height: '44px',
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center'
-                }}
-              >
-                <i className="send-icon">📤</i>
-              </button>
-            </form>
-          </>
-        ) : (
-          <div className="no-conversation-selected">
-            <p>Chọn một cuộc trò chuyện để bắt đầu</p>
+              <span className="send-icon">📤</span>
+              <span className="send-text">Gửi</span>
+            </button>
           </div>
-        )}
+        </form>
       </div>
     </div>
   );

@@ -5,7 +5,7 @@ const getProfile = async (req, res) => {
   try {
     const studentId = req.user.id;
 
-    const studentDoc = await db.collection('students').doc(studentId).get();
+    const studentDoc = await db.collection('users').doc(studentId).get();
     
     if (!studentDoc.exists) {
       return res.status(404).json({ error: 'Hồ sơ học sinh không tồn tại' });
@@ -17,7 +17,7 @@ const getProfile = async (req, res) => {
     let instructorName = null;
     if (student.instructorId) {
       try {
-        const instructorDoc = await db.collection('instructors').doc(student.instructorId).get();
+        const instructorDoc = await db.collection('users').doc(student.instructorId).get();
         if (instructorDoc.exists) {
           instructorName = instructorDoc.data().name;
         }
@@ -33,7 +33,7 @@ const getProfile = async (req, res) => {
         name: student.name,
         email: student.email,
         phoneNumber: student.phoneNumber,
-        username: student.username,
+        username: student.username || student.name, // Use name as username if not set
         instructorId: student.instructorId,
         instructorName: instructorName,
         createdAt: student.createdAt
@@ -60,7 +60,7 @@ const updateProfile = async (req, res) => {
     if (email) updateData.email = email;
     if (phoneNumber) updateData.phoneNumber = phoneNumber;
 
-    await db.collection('students').doc(studentId).update(updateData);
+    await db.collection('users').doc(studentId).update(updateData);
 
     res.json({ success: true, message: 'Cập nhật hồ sơ thành công' });
 
